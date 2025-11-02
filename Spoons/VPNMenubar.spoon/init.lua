@@ -57,8 +57,11 @@ end
 
 local function generateVPNIcon(isConnected)
     local icon_size = {w = 18, h = 18}
+    local text_width = 8
+    local total_width = icon_size.w + text_width
+    local canvas_size = {w = total_width, h = icon_size.h}
     
-    local canvas = hs.canvas.new(icon_size)
+    local canvas = hs.canvas.new(canvas_size)
     
     local iconPath = isConnected and "icons/locked.png" or "icons/unlocked.png"
     local fullIconPath = hs.spoons.resourcePath(iconPath)
@@ -72,6 +75,44 @@ local function generateVPNIcon(isConnected)
         imageAlignment = "center"
     }
     
+    local text_color = isConnected and {red = 1.0, green = 0.6, blue = 0.35} or {red = 0.9, green = 0.9, blue = 0.9}
+    local font_size = 6
+    local gap_between_letters = 0.5
+    local letter_spacing = font_size + gap_between_letters
+    local start_x = icon_size.w + 1
+    local total_text_height = (font_size * 3) + (gap_between_letters * 2)
+    local start_y = (icon_size.h - total_text_height) / 2
+    
+    canvas[2] = {
+        type = "text",
+        text = "V",
+        frame = {x = start_x, y = start_y, w = text_width, h = font_size},
+        textSize = font_size,
+        textColor = text_color,
+        textAlignment = "left",
+        textStyle = {bold = true}
+    }
+    
+    canvas[3] = {
+        type = "text",
+        text = "P",
+        frame = {x = start_x, y = start_y + letter_spacing, w = text_width, h = font_size},
+        textSize = font_size,
+        textColor = text_color,
+        textAlignment = "left",
+        textStyle = {bold = true}
+    }
+    
+    canvas[4] = {
+        type = "text",
+        text = "N",
+        frame = {x = start_x, y = start_y + (letter_spacing * 2), w = text_width, h = font_size},
+        textSize = font_size,
+        textColor = text_color,
+        textAlignment = "left",
+        textStyle = {bold = true}
+    }
+    
     local image_object = canvas:imageFromCanvas()
     canvas:delete()
     
@@ -80,16 +121,8 @@ end
 
 local function updateMenubar()
     local icon = generateVPNIcon(obj._isConnected)
-    obj._menubar:setIcon(icon, false)
-    
-    if obj._isConnected then
-        local styledTitle = hs.styledtext.new("VPN", {
-            color = carrotOrange
-        })
-        obj._menubar:setTitle(styledTitle)
-    else
-        obj._menubar:setTitle("VPN")
-    end
+    obj._menubar:setIcon(icon, not obj._isConnected)
+    obj._menubar:setTitle("")
 end
 
 local function updateVPNStatus()
@@ -134,8 +167,8 @@ function obj:init()
     end
 
     local initialIcon = generateVPNIcon(false)
-    self._menubar:setIcon(initialIcon, false)
-    self._menubar:setTitle("VPN")
+    self._menubar:setIcon(initialIcon, true)
+    self._menubar:setTitle("")
     self._menubar:setMenu(createMenu)
     
     self._configWatcher = hs.network.configuration.open()
