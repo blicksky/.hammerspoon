@@ -53,9 +53,9 @@ local function getUptime()
 end
 
 local function getUptimeColor(days)
-    if days > 30 then
+    if days > 15 then
         return { red = 1, green = 0, blue = 0 }
-    elseif days > 25 then
+    elseif days > 10 then
         return { red = 1, green = 1, blue = 0 }
     end
     return nil
