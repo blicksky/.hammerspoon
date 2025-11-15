@@ -8,12 +8,14 @@ local obj = {
     _webviews = {},
     _clickWatchers = {},
     _config = nil,
+    _datastore = nil,
 }
 
 local DEFAULT_WINDOW_WIDTH = 400
 local DEFAULT_WINDOW_HEIGHT = 500
 local WINDOW_OFFSET_X = 10
 local WINDOW_OFFSET_Y = 25
+local MOBILE_USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
 
 local function loadConfig()
     local configPath = hs.spoons.resourcePath("config.json")
@@ -73,12 +75,15 @@ local function createWebview(url, name)
         return obj._webviews[url]
     end
     
+    if not obj._datastore then
+        obj._datastore = hs.webview.datastore.newPrivate()
+    end
+    
     local mousePos = getMousePosition()
     local windowX, windowY = calculateWindowPosition(mousePos.x, mousePos.y)
     
-    local datastore = hs.webview.datastore.newPrivate()
     local preferences = {
-        datastore = datastore
+        datastore = obj._datastore
     }
     
     local webview = hs.webview.new({
@@ -89,6 +94,7 @@ local function createWebview(url, name)
     }, preferences):url(url)
       :windowStyle("titled")
       :windowTitle(name)
+      :userAgent(MOBILE_USER_AGENT)
       :allowTextEntry(true)
       :allowGestures(true)
       :allowNewWindows(false)
@@ -211,6 +217,7 @@ function obj:stop()
     
     self._webviews = {}
     self._clickWatchers = {}
+    self._datastore = nil
     
     if self._menubar then
         self._menubar:delete()
