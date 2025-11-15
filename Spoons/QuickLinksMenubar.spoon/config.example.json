@@ -1,0 +1,12 @@
+{
+  "links": [
+    {
+      "name": "Example Link 1",
+      "URL": "https://example.com"
+    },
+    {
+      "name": "Example Link 2",
+      "URL": "https://github.com"
+    }
+  ]
+}

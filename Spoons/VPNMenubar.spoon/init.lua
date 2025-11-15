@@ -89,8 +89,7 @@ local function generateVPNIcon(isConnected)
         frame = {x = start_x, y = start_y, w = text_width, h = font_size},
         textSize = font_size,
         textColor = text_color,
-        textAlignment = "left",
-        textStyle = {bold = true}
+        textAlignment = "left"
     }
     
     canvas[3] = {
@@ -99,8 +98,7 @@ local function generateVPNIcon(isConnected)
         frame = {x = start_x, y = start_y + letter_spacing, w = text_width, h = font_size},
         textSize = font_size,
         textColor = text_color,
-        textAlignment = "left",
-        textStyle = {bold = true}
+        textAlignment = "left"
     }
     
     canvas[4] = {
@@ -109,8 +107,7 @@ local function generateVPNIcon(isConnected)
         frame = {x = start_x, y = start_y + (letter_spacing * 2), w = text_width, h = font_size},
         textSize = font_size,
         textColor = text_color,
-        textAlignment = "left",
-        textStyle = {bold = true}
+        textAlignment = "left"
     }
     
     local image_object = canvas:imageFromCanvas()
