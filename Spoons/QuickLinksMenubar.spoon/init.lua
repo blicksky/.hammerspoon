@@ -14,7 +14,12 @@ local DEFAULT_WINDOW_WIDTH = 400
 local DEFAULT_WINDOW_HEIGHT = 500
 local WINDOW_OFFSET_X = 10
 local WINDOW_OFFSET_Y = 25
+local MOUSE_OFFSET = 20
+local GMAIL_CSS_DELAY = 0.5
+
 local USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+local GMAIL_URL_PATTERN = "^https://mail%.google%.com"
+local GMAIL_CSS = "div[role=toolbar], div[role=navigation], div[role=navigation] + div, div[role=navigation] + div ~ div:has(div[role=tabpanel]), header[role=banner] { display: none !important; }"
 
 local function loadConfig()
     local configPath = hs.spoons.resourcePath("config.json")
@@ -47,35 +52,62 @@ local function loadConfig()
     return {}
 end
 
+local function findScreenContainingPoint(x, y)
+    for _, screen in ipairs(hs.screen.allScreens()) do
+        local frame = screen:fullFrame()
+        if x >= frame.x and x <= frame.x + frame.w and
+           y >= frame.y and y <= frame.y + frame.h then
+            return screen
+        end
+    end
+    return hs.screen.mainScreen()
+end
+
 local function calculateWindowPosition(mouseX, mouseY, windowWidth, windowHeight)
     windowWidth = windowWidth or DEFAULT_WINDOW_WIDTH
     windowHeight = windowHeight or DEFAULT_WINDOW_HEIGHT
     
-    local screen = hs.screen.mainScreen()
-    if mouseX and mouseY then
-        for _, s in ipairs(hs.screen.allScreens()) do
-            local frame = s:fullFrame()
-            if mouseX >= frame.x and mouseX <= frame.x + frame.w and
-               mouseY >= frame.y and mouseY <= frame.y + frame.h then
-                screen = s
-                break
-            end
-        end
-    end
-    
+    local screen = mouseX and mouseY and findScreenContainingPoint(mouseX, mouseY) or hs.screen.mainScreen()
     local screenFrame = screen:fullFrame()
     
     local windowX = screenFrame.x + screenFrame.w - windowWidth - WINDOW_OFFSET_X
     local windowY = screenFrame.y + WINDOW_OFFSET_Y
     
     if mouseX and mouseY then
-        local offsetFromMouse = 20
-        windowX = math.min(mouseX + offsetFromMouse, screenFrame.x + screenFrame.w - windowWidth - WINDOW_OFFSET_X)
-        windowY = math.max(mouseY - offsetFromMouse, screenFrame.y + WINDOW_OFFSET_Y)
+        windowX = math.min(mouseX + MOUSE_OFFSET, screenFrame.x + screenFrame.w - windowWidth - WINDOW_OFFSET_X)
+        windowY = math.max(mouseY - MOUSE_OFFSET, screenFrame.y + WINDOW_OFFSET_Y)
         windowY = math.min(windowY, screenFrame.y + screenFrame.h - windowHeight - WINDOW_OFFSET_Y)
     end
     
     return windowX, windowY
+end
+
+local function getWindowSize(width, height)
+    return width or DEFAULT_WINDOW_WIDTH, height or DEFAULT_WINDOW_HEIGHT
+end
+
+local function injectGmailCSS(webview)
+    local escapedCSS = GMAIL_CSS:gsub("'", "\\'")
+    local script = string.format([[
+        (function() {
+            if (!document.getElementById('hammerspoon-gmail-css')) {
+                var style = document.createElement('style');
+                style.id = 'hammerspoon-gmail-css';
+                style.textContent = '%s';
+                (document.head || document.documentElement).appendChild(style);
+            }
+        })();
+    ]], escapedCSS)
+    webview:evaluateJavaScript(script)
+end
+
+local function isGmailURL(url)
+    return url and string.match(string.lower(url), GMAIL_URL_PATTERN) ~= nil
+end
+
+local function isPointInsideFrame(point, frame)
+    return point.x >= frame.x and point.x <= frame.x + frame.w and
+           point.y >= frame.y and point.y <= frame.y + frame.h
 end
 
 local function createWebview(url, name, width, height)
@@ -83,9 +115,7 @@ local function createWebview(url, name, width, height)
         return obj._webviews[url]
     end
     
-    local windowWidth = width or DEFAULT_WINDOW_WIDTH
-    local windowHeight = height or DEFAULT_WINDOW_HEIGHT
-    
+    local windowWidth, windowHeight = getWindowSize(width, height)
     local mousePos = hs.mouse.absolutePosition()
     local windowX, windowY = calculateWindowPosition(mousePos.x, mousePos.y, windowWidth, windowHeight)
     
@@ -106,21 +136,9 @@ local function createWebview(url, name, width, height)
     
     webview:navigationCallback(function(navigationType)
         if navigationType == "didFinishNavigation" then
-            hs.timer.doAfter(0.5, function()
-                local currentURL = webview:url()
-                
-                if currentURL and string.match(string.lower(currentURL), "^https://mail%.google%.com") then
-                    local script = [[
-                        (function() {
-                            if (!document.getElementById('hammerspoon-gmail-css')) {
-                                var style = document.createElement('style');
-                                style.id = 'hammerspoon-gmail-css';
-                                style.textContent = 'div[role=toolbar], div[role=navigation], div[role=navigation] + div, div[role=navigation] + div ~ div:has(div[role=tabpanel]), header[role=banner] { display: none !important; }';
-                                (document.head || document.documentElement).appendChild(style);
-                            }
-                        })();
-                    ]]
-                    webview:evaluateJavaScript(script)
+            hs.timer.doAfter(GMAIL_CSS_DELAY, function()
+                if isGmailURL(webview:url()) then
+                    injectGmailCSS(webview)
                 end
             end)
         end
@@ -130,12 +148,7 @@ local function createWebview(url, name, width, height)
         local clickPoint = event:location()
         local webviewFrame = webview:frame()
         
-        local isInside = clickPoint.x >= webviewFrame.x and 
-                        clickPoint.x <= webviewFrame.x + webviewFrame.w and
-                        clickPoint.y >= webviewFrame.y and 
-                        clickPoint.y <= webviewFrame.y + webviewFrame.h
-        
-        if not isInside and webview:isVisible() then
+        if not isPointInsideFrame(clickPoint, webviewFrame) and webview:isVisible() then
             webview:hide()
         end
         
@@ -149,9 +162,21 @@ local function createWebview(url, name, width, height)
     return webview
 end
 
+local function showWebview(webview, name, width, height)
+    local windowWidth, windowHeight = getWindowSize(width, height)
+    local mousePos = hs.mouse.absolutePosition()
+    local windowX, windowY = calculateWindowPosition(mousePos.x, mousePos.y, windowWidth, windowHeight)
+    
+    webview:windowTitle(name)
+    webview:size({w = windowWidth, h = windowHeight})
+    webview:topLeft({x = windowX, y = windowY})
+    webview:level(hs.drawing.windowLevels.floating)
+    webview:show()
+    webview:bringToFront()
+end
+
 local function toggleWebview(url, name, width, height)
     local webview = createWebview(url, name, width, height)
-    
     local currentURL = webview:url()
     local needsNavigation = currentURL ~= url
     
@@ -161,17 +186,7 @@ local function toggleWebview(url, name, width, height)
         if needsNavigation then
             webview:url(url)
         end
-        
-        local windowWidth = width or DEFAULT_WINDOW_WIDTH
-        local windowHeight = height or DEFAULT_WINDOW_HEIGHT
-        local mousePos = hs.mouse.absolutePosition()
-        local windowX, windowY = calculateWindowPosition(mousePos.x, mousePos.y, windowWidth, windowHeight)
-        webview:windowTitle(name)
-        webview:size({w = windowWidth, h = windowHeight})
-        webview:topLeft({x = windowX, y = windowY})
-        webview:level(hs.drawing.windowLevels.floating)
-        webview:show()
-        webview:bringToFront()
+        showWebview(webview, name, width, height)
     end
 end
 
