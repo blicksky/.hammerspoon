@@ -8,14 +8,13 @@ local obj = {
     _webviews = {},
     _clickWatchers = {},
     _config = nil,
-    _datastore = nil,
 }
 
 local DEFAULT_WINDOW_WIDTH = 400
 local DEFAULT_WINDOW_HEIGHT = 500
 local WINDOW_OFFSET_X = 10
 local WINDOW_OFFSET_Y = 25
-local MOBILE_USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+local USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 
 local function loadConfig()
     local configPath = hs.spoons.resourcePath("config.json")
@@ -48,58 +47,84 @@ local function loadConfig()
     return {}
 end
 
-local function getMousePosition()
-    local mousePoint = hs.mouse.absolutePosition()
-    return mousePoint
-end
-
-local function calculateWindowPosition(mouseX, mouseY)
+local function calculateWindowPosition(mouseX, mouseY, windowWidth, windowHeight)
+    windowWidth = windowWidth or DEFAULT_WINDOW_WIDTH
+    windowHeight = windowHeight or DEFAULT_WINDOW_HEIGHT
+    
     local screen = hs.screen.mainScreen()
+    if mouseX and mouseY then
+        for _, s in ipairs(hs.screen.allScreens()) do
+            local frame = s:fullFrame()
+            if mouseX >= frame.x and mouseX <= frame.x + frame.w and
+               mouseY >= frame.y and mouseY <= frame.y + frame.h then
+                screen = s
+                break
+            end
+        end
+    end
+    
     local screenFrame = screen:fullFrame()
     
-    local windowX = screenFrame.w - DEFAULT_WINDOW_WIDTH - WINDOW_OFFSET_X
-    local windowY = WINDOW_OFFSET_Y
+    local windowX = screenFrame.x + screenFrame.w - windowWidth - WINDOW_OFFSET_X
+    local windowY = screenFrame.y + WINDOW_OFFSET_Y
     
     if mouseX and mouseY then
         local offsetFromMouse = 20
-        windowX = math.min(mouseX + offsetFromMouse, screenFrame.w - DEFAULT_WINDOW_WIDTH - WINDOW_OFFSET_X)
-        windowY = math.max(mouseY - offsetFromMouse, WINDOW_OFFSET_Y)
-        windowY = math.min(windowY, screenFrame.h - DEFAULT_WINDOW_HEIGHT - WINDOW_OFFSET_Y)
+        windowX = math.min(mouseX + offsetFromMouse, screenFrame.x + screenFrame.w - windowWidth - WINDOW_OFFSET_X)
+        windowY = math.max(mouseY - offsetFromMouse, screenFrame.y + WINDOW_OFFSET_Y)
+        windowY = math.min(windowY, screenFrame.y + screenFrame.h - windowHeight - WINDOW_OFFSET_Y)
     end
     
     return windowX, windowY
 end
 
-local function createWebview(url, name)
+local function createWebview(url, name, width, height)
     if obj._webviews[url] then
         return obj._webviews[url]
     end
     
-    if not obj._datastore then
-        obj._datastore = hs.webview.datastore.newPrivate()
-    end
+    local windowWidth = width or DEFAULT_WINDOW_WIDTH
+    local windowHeight = height or DEFAULT_WINDOW_HEIGHT
     
-    local mousePos = getMousePosition()
-    local windowX, windowY = calculateWindowPosition(mousePos.x, mousePos.y)
-    
-    local preferences = {
-        datastore = obj._datastore
-    }
+    local mousePos = hs.mouse.absolutePosition()
+    local windowX, windowY = calculateWindowPosition(mousePos.x, mousePos.y, windowWidth, windowHeight)
     
     local webview = hs.webview.new({
         x = windowX,
         y = windowY,
-        w = DEFAULT_WINDOW_WIDTH,
-        h = DEFAULT_WINDOW_HEIGHT,
-    }, preferences):url(url)
+        w = windowWidth,
+        h = windowHeight,
+    }):url(url)
       :windowStyle("titled")
       :windowTitle(name)
-      :userAgent(MOBILE_USER_AGENT)
+      :userAgent(USER_AGENT)
       :allowTextEntry(true)
       :allowGestures(true)
       :allowNewWindows(false)
       :closeOnEscape(true)
       :level(hs.drawing.windowLevels.floating)
+    
+    webview:navigationCallback(function(navigationType)
+        if navigationType == "didFinishNavigation" then
+            hs.timer.doAfter(0.5, function()
+                local currentURL = webview:url()
+                
+                if currentURL and string.match(string.lower(currentURL), "^https://mail%.google%.com") then
+                    local script = [[
+                        (function() {
+                            if (!document.getElementById('hammerspoon-gmail-css')) {
+                                var style = document.createElement('style');
+                                style.id = 'hammerspoon-gmail-css';
+                                style.textContent = 'div[role=toolbar], div[role=navigation], div[role=navigation] + div, div[role=navigation] + div ~ div:has(div[role=tabpanel]), header[role=banner] { display: none !important; }';
+                                (document.head || document.documentElement).appendChild(style);
+                            }
+                        })();
+                    ]]
+                    webview:evaluateJavaScript(script)
+                end
+            end)
+        end
+    end)
     
     local clickWatcher = hs.eventtap.new({hs.eventtap.event.types.leftMouseDown, hs.eventtap.event.types.rightMouseDown}, function(event)
         local clickPoint = event:location()
@@ -112,7 +137,6 @@ local function createWebview(url, name)
         
         if not isInside and webview:isVisible() then
             webview:hide()
-            return false
         end
         
         return false
@@ -125,8 +149,8 @@ local function createWebview(url, name)
     return webview
 end
 
-local function toggleWebview(url, name)
-    local webview = createWebview(url, name)
+local function toggleWebview(url, name, width, height)
+    local webview = createWebview(url, name, width, height)
     
     local currentURL = webview:url()
     local needsNavigation = currentURL ~= url
@@ -137,9 +161,13 @@ local function toggleWebview(url, name)
         if needsNavigation then
             webview:url(url)
         end
-        local mousePos = getMousePosition()
-        local windowX, windowY = calculateWindowPosition(mousePos.x, mousePos.y)
+        
+        local windowWidth = width or DEFAULT_WINDOW_WIDTH
+        local windowHeight = height or DEFAULT_WINDOW_HEIGHT
+        local mousePos = hs.mouse.absolutePosition()
+        local windowX, windowY = calculateWindowPosition(mousePos.x, mousePos.y, windowWidth, windowHeight)
         webview:windowTitle(name)
+        webview:size({w = windowWidth, h = windowHeight})
         webview:topLeft({x = windowX, y = windowY})
         webview:level(hs.drawing.windowLevels.floating)
         webview:show()
@@ -171,7 +199,7 @@ local function createMenu()
             table.insert(menu, {
                 title = item.name,
                 fn = function()
-                    toggleWebview(item.URL, item.name)
+                    toggleWebview(item.URL, item.name, item.width, item.height)
                 end
             })
         end
@@ -217,7 +245,6 @@ function obj:stop()
     
     self._webviews = {}
     self._clickWatchers = {}
-    self._datastore = nil
     
     if self._menubar then
         self._menubar:delete()

@@ -2,7 +2,9 @@
   "links": [
     {
       "name": "Example Link 1",
-      "URL": "https://example.com"
+      "URL": "https://example.com",
+      "width": 400,
+      "height": 500
     },
     {
       "name": "Example Link 2",
