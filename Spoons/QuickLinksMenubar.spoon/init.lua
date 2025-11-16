@@ -16,6 +16,7 @@ local WINDOW_OFFSET_X = 10
 local WINDOW_OFFSET_Y = 25
 local MOUSE_OFFSET = 20
 local GMAIL_CSS_DELAY = 0.5
+local ICON_SIZE = 18
 
 local USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 local GMAIL_URL_PATTERN = "^https://mail%.google%.com"
@@ -108,6 +109,84 @@ end
 local function isPointInsideFrame(point, frame)
     return point.x >= frame.x and point.x <= frame.x + frame.w and
            point.y >= frame.y and point.y <= frame.y + frame.h
+end
+
+local function resizeImage(image, size)
+    if not image then
+        return nil
+    end
+    local originalSize = image:size()
+    if originalSize.w == size and originalSize.h == size then
+        return image
+    end
+    
+    local canvas = hs.canvas.new({w = size, h = size})
+    canvas[1] = {
+        type = "image",
+        image = image,
+        frame = {x = 0, y = 0, w = size, h = size},
+        imageScaling = "scaleProportionally",
+        imageAlignment = "center"
+    }
+    local resized = canvas:imageFromCanvas()
+    canvas:delete()
+    return resized
+end
+
+local function getIconCachePath(itemUrl)
+    local tempDir = hs.fs.temporaryDirectory()
+    local cacheDir = tempDir .. "QuickLinksMenubar/"
+    if not hs.fs.attributes(cacheDir) then
+        hs.fs.mkdir(cacheDir)
+    end
+    local filename = itemUrl:gsub("[^%w%.%-]", "_"):gsub("https?://", ""):gsub("/", "_")
+    return cacheDir .. filename .. ".ico"
+end
+
+local function getIconImage(itemUrl)
+    local cachePath = getIconCachePath(itemUrl)
+    if not hs.fs.attributes(cachePath) then
+        return nil
+    end
+    
+    local image = hs.image.imageFromPath(cachePath)
+    if not image then
+        return nil
+    end
+    
+    return resizeImage(image, ICON_SIZE)
+end
+
+local function fetchIcon(iconUrl, itemUrl)
+    if not iconUrl then
+        return
+    end
+    
+    local cachePath = getIconCachePath(itemUrl)
+    
+    hs.http.asyncGet(iconUrl, {
+        ["User-Agent"] = USER_AGENT
+    }, function(status, body, headers)
+        if status == 200 and body and #body > 0 then
+            local file = io.open(cachePath, "wb")
+            if file then
+                file:write(body)
+                file:close()
+            end
+        end
+    end)
+end
+
+local function fetchAllIcons()
+    if not obj._config then
+        return
+    end
+    
+    for _, item in ipairs(obj._config) do
+        if item.URL and item.iconUrl then
+            fetchIcon(item.iconUrl, item.URL)
+        end
+    end
 end
 
 local function createWebview(url, name, width, height)
@@ -209,14 +288,26 @@ local function createMenu()
     
     local menu = {}
     
-    for i, item in ipairs(obj._config) do
+    for _, item in ipairs(obj._config) do
         if item.name and item.URL then
-            table.insert(menu, {
-                title = item.name,
+            local url = item.URL
+            local name = item.name
+            local width = item.width
+            local height = item.height
+            
+            local menuItem = {
+                title = name,
                 fn = function()
-                    toggleWebview(item.URL, item.name, item.width, item.height)
+                    toggleWebview(url, name, width, height)
                 end
-            })
+            }
+            
+            local iconImage = getIconImage(url)
+            if iconImage then
+                menuItem.image = iconImage
+            end
+            
+            table.insert(menu, menuItem)
         end
     end
     
@@ -237,6 +328,8 @@ function obj:init()
     
     self._menubar:setTitle("📱")
     self._menubar:setMenu(createMenu)
+    
+    fetchAllIcons()
     
     return self
 end
