@@ -9,3 +9,6 @@ vpnMenubar:init():start()
 
 local quickLinksMenubar = hs.loadSpoon("QuickLinksMenubar")
 quickLinksMenubar:init():start()
+
+local calendarMenubar = hs.loadSpoon("CalendarMenubar")
+calendarMenubar:init():start()
