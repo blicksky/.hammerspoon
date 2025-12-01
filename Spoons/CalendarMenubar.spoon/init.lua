@@ -12,16 +12,66 @@ local obj = {
     _webviewOrigin = nil,
 }
 
-local DEFAULT_WINDOW_WIDTH = 600
-local DEFAULT_WINDOW_HEIGHT = 500
+local DEFAULT_WINDOW_WIDTH = 700
+local DEFAULT_WINDOW_HEIGHT = 600
 local WINDOW_OFFSET_X = 10
 local WINDOW_OFFSET_Y = 25
 local MOUSE_OFFSET = 20
-local GOOGLE_CALENDAR_URL = table.concat({
-    "https://calendar.google.com/calendar/embed",
-    "?src=primary",
-    "&src=en.usa%23holiday@group.v.calendar.google.com",
-}, "")
+
+local function urlEncode(str)
+    if not str then
+        return ""
+    end
+    return (str:gsub("([^%w%-%.%_%~])", function(c)
+        return string.format("%%%02X", string.byte(c))
+    end))
+end
+
+local function getSystemTimezone()
+    local handle = io.popen("readlink /etc/localtime 2>/dev/null || echo ''")
+    local result = handle:read("*a")
+    handle:close()
+    
+    if result then
+        result = result:gsub("%s+", "")
+        local timezone = result:match("zoneinfo/(.+)$")
+        if timezone then
+            return timezone
+        end
+    end
+    
+    local handle2 = io.popen("systemsetup -gettimezone 2>/dev/null | cut -d' ' -f3 || echo ''")
+    local result2 = handle2:read("*a")
+    handle2:close()
+    
+    if result2 then
+        result2 = result2:gsub("%s+", "")
+        if result2 ~= "" then
+            return result2
+        end
+    end
+    
+    return "America/New_York"
+end
+
+local function buildCalendarURL()
+    local timezone = getSystemTimezone()
+    local encodedTimezone = urlEncode(timezone)
+    
+    return table.concat({
+        "https://calendar.google.com/calendar/embed",
+        "?wkst=1",
+        "&ctz=" .. encodedTimezone,
+        "&showPrint=0",
+        "&showTabs=0",
+        "&title",
+        "&showTitle=0",
+        "&src=" .. urlEncode("en.usa#holiday@group.v.calendar.google.com"),
+        "&src=" .. urlEncode("ZW4uanVkYWlzbSNob2xpZGF5QGdyb3VwLnYuY2FsZW5kYXIuZ29vZ2xlLmNvbQ"),
+        "&color=%239ba4db",
+        "&color=%239dc676"
+    }, "")
+end
 
 local USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 
@@ -147,13 +197,14 @@ local function createWebview()
     end
     
     local origin = refreshWebviewOrigin()
+    local calendarURL = buildCalendarURL()
     
     local webview = hs.webview.new({
         x = origin.x,
         y = origin.y,
         w = DEFAULT_WINDOW_WIDTH,
         h = DEFAULT_WINDOW_HEIGHT,
-    }):url(GOOGLE_CALENDAR_URL)
+    }):url(calendarURL)
       :windowStyle("titled")
       :windowTitle("Google Calendar")
       :userAgent(USER_AGENT)
