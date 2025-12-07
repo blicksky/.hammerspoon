@@ -8,8 +8,10 @@ local obj = {
     _webview = nil,
     _canvas = nil,
     _timer = nil,
+    _midnightTimer = nil,
     _webviewVisible = false,
     _webviewOrigin = nil,
+    _lastDisplayedDate = nil,
 }
 
 local DEFAULT_WINDOW_WIDTH = 700
@@ -293,10 +295,23 @@ local function createDateIcon()
 end
 
 local function updateMenubar()
+    local date = os.date("*t")
+    local currentDateKey = date.year * 10000 + date.month * 100 + date.day
+    
+    if obj._lastDisplayedDate == currentDateKey then
+        return
+    end
+    
+    obj._lastDisplayedDate = currentDateKey
+    
     local icon = createDateIcon()
     if icon and obj._menubar then
         obj._menubar:setIcon(icon, false)
     end
+end
+
+local function updateMenubarAfterMidnight()
+    hs.timer.doAfter(2, updateMenubar)
 end
 
 
@@ -313,7 +328,8 @@ function obj:init()
     updateMenubar()
     self._menubar:setClickCallback(toggleWebview)
     
-    self._timer = hs.timer.doAt("00:00", "1d", updateMenubar)
+    self._timer = hs.timer.doEvery(60, updateMenubar)
+    self._midnightTimer = hs.timer.doAt("00:00", "1d", updateMenubarAfterMidnight)
     
     return self
 end
@@ -323,6 +339,9 @@ function obj:start()
     if self._timer then
         self._timer:start()
     end
+    if self._midnightTimer then
+        self._midnightTimer:start()
+    end
     return self
 end
 
@@ -330,6 +349,11 @@ function obj:stop()
     if self._timer then
         self._timer:stop()
         self._timer = nil
+    end
+    
+    if self._midnightTimer then
+        self._midnightTimer:stop()
+        self._midnightTimer = nil
     end
     
     if self._canvas then
@@ -348,6 +372,7 @@ function obj:stop()
     end
     
     self._webviewOrigin = nil
+    self._lastDisplayedDate = nil
     
     return self
 end
