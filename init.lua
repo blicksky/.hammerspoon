@@ -12,3 +12,6 @@ quickLinksMenubar:init():start()
 
 local calendarMenubar = hs.loadSpoon("CalendarMenubar")
 calendarMenubar:init():start()
+
+local dismissMeetingMenubar = hs.loadSpoon("DismissMeetingMenubar")
+dismissMeetingMenubar:init():start()
