@@ -7,10 +7,17 @@ local obj = {
     _menubar = nil,
 }
 
-local MENUBAR_ICON_SIZE = 22
+local MENUBAR_ICON_SIZE = 16
 local SHORTCUT_NAME = "Dismiss Nearest Meeting"
 
 local function createCalendarIcon()
+    local iconPath = hs.spoons.resourcePath("icons/calendar.png")
+    local calendarIcon = hs.image.imageFromPath(iconPath)
+    
+    if not calendarIcon then
+        error("Failed to load calendar icon from " .. iconPath)
+    end
+    
     local canvas = hs.canvas.new({
         x = 0,
         y = 0,
@@ -19,17 +26,11 @@ local function createCalendarIcon()
     })
     
     canvas[1] = {
-        type = "text",
-        text = "🗓️",
-        textFont = hs.styledtext.defaultFonts.systemFont,
-        textSize = MENUBAR_ICON_SIZE - 2,
-        textAlignment = "center",
-        frame = {
-            x = 0,
-            y = 0,
-            w = MENUBAR_ICON_SIZE,
-            h = MENUBAR_ICON_SIZE,
-        },
+        type = "image",
+        image = calendarIcon,
+        frame = { x = 0, y = 0, w = MENUBAR_ICON_SIZE, h = MENUBAR_ICON_SIZE },
+        imageScaling = "scaleProportionally",
+        imageAlignment = "center",
     }
     
     local xSize = 6
@@ -104,3 +105,5 @@ function obj:stop()
 end
 
 return obj
+
+
