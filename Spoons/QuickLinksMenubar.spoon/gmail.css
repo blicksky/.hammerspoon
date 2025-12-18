@@ -1,0 +1,8 @@
+div[role="toolbar"],
+div[role="navigation"],
+div[role="navigation"] + div,
+div[role="navigation"] + div ~ div:has(div[role="tabpanel"]),
+header[role="banner"] {
+  display: none !important;
+}
+

@@ -15,12 +15,24 @@ local DEFAULT_WINDOW_HEIGHT = 500
 local WINDOW_OFFSET_X = 10
 local WINDOW_OFFSET_Y = 25
 local MOUSE_OFFSET = 20
-local GMAIL_CSS_DELAY = 0.5
+local CSS_INJECT_DELAY = 0.5
 local ICON_SIZE = 18
 
 local USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
-local GMAIL_URL_PATTERN = "^https://mail%.google%.com"
-local GMAIL_CSS = "div[role=toolbar], div[role=navigation], div[role=navigation] + div, div[role=navigation] + div ~ div:has(div[role=tabpanel]), header[role=banner] { display: none !important; }"
+
+local function loadCssFile(cssFileName)
+    local cssPath = hs.spoons.resourcePath(cssFileName)
+    local cssFile = io.open(cssPath, "r")
+    
+    if not cssFile then
+        return nil
+    end
+    
+    local content = cssFile:read("*a")
+    cssFile:close()
+    
+    return content
+end
 
 local function loadConfig()
     local configPath = hs.spoons.resourcePath("config.json")
@@ -46,11 +58,18 @@ local function loadConfig()
         return {}
     end
     
+    local links = {}
     if data.links and type(data.links) == "table" then
-        return data.links
+        links = data.links
     end
     
-    return {}
+    for _, link in ipairs(links) do
+        if link.cssFile then
+            link.css = loadCssFile(link.cssFile)
+        end
+    end
+    
+    return links
 end
 
 local function findScreenContainingPoint(x, y)
@@ -87,23 +106,22 @@ local function getWindowSize(width, height)
     return width or DEFAULT_WINDOW_WIDTH, height or DEFAULT_WINDOW_HEIGHT
 end
 
-local function injectGmailCSS(webview)
-    local escapedCSS = GMAIL_CSS:gsub("'", "\\'")
+local function injectCSS(webview, css)
+    if not css then
+        return
+    end
+    local escapedCSS = css:gsub("'", "\\'"):gsub("\n", " ")
     local script = string.format([[
         (function() {
-            if (!document.getElementById('hammerspoon-gmail-css')) {
+            if (!document.getElementById('hammerspoon-custom-css')) {
                 var style = document.createElement('style');
-                style.id = 'hammerspoon-gmail-css';
+                style.id = 'hammerspoon-custom-css';
                 style.textContent = '%s';
                 (document.head || document.documentElement).appendChild(style);
             }
         })();
     ]], escapedCSS)
     webview:evaluateJavaScript(script)
-end
-
-local function isGmailURL(url)
-    return url and string.match(string.lower(url), GMAIL_URL_PATTERN) ~= nil
 end
 
 local function isPointInsideFrame(point, frame)
@@ -189,7 +207,7 @@ local function fetchAllIcons()
     end
 end
 
-local function createWebview(url, name, width, height)
+local function createWebview(url, name, width, height, css)
     if obj._webviews[url] then
         return obj._webviews[url]
     end
@@ -213,15 +231,15 @@ local function createWebview(url, name, width, height)
       :closeOnEscape(true)
       :level(hs.drawing.windowLevels.floating)
     
-    webview:navigationCallback(function(navigationType)
-        if navigationType == "didFinishNavigation" then
-            hs.timer.doAfter(GMAIL_CSS_DELAY, function()
-                if isGmailURL(webview:url()) then
-                    injectGmailCSS(webview)
-                end
-            end)
-        end
-    end)
+    if css then
+        webview:navigationCallback(function(navigationType)
+            if navigationType == "didFinishNavigation" then
+                hs.timer.doAfter(CSS_INJECT_DELAY, function()
+                    injectCSS(webview, css)
+                end)
+            end
+        end)
+    end
     
     local clickWatcher = hs.eventtap.new({hs.eventtap.event.types.leftMouseDown, hs.eventtap.event.types.rightMouseDown}, function(event)
         local clickPoint = event:location()
@@ -254,8 +272,8 @@ local function showWebview(webview, name, width, height)
     webview:bringToFront()
 end
 
-local function toggleWebview(url, name, width, height)
-    local webview = createWebview(url, name, width, height)
+local function toggleWebview(url, name, width, height, css)
+    local webview = createWebview(url, name, width, height, css)
     local currentURL = webview:url()
     local needsNavigation = currentURL ~= url
     
@@ -294,11 +312,12 @@ local function createMenu()
             local name = item.name
             local width = item.width
             local height = item.height
+            local css = item.css
             
             local menuItem = {
                 title = name,
                 fn = function()
-                    toggleWebview(url, name, width, height)
+                    toggleWebview(url, name, width, height, css)
                 end
             }
             
