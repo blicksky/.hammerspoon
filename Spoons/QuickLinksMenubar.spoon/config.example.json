@@ -5,7 +5,8 @@
       "URL": "https://example.com",
       "width": 400,
       "height": 500,
-      "cssFile": "example.css"
+      "cssFile": "example.css",
+      "jsFile": "example.js"
     },
     {
       "name": "Example Link 2",

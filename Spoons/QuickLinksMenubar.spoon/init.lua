@@ -20,16 +20,16 @@ local ICON_SIZE = 18
 
 local USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 
-local function loadCssFile(cssFileName)
-    local cssPath = hs.spoons.resourcePath(cssFileName)
-    local cssFile = io.open(cssPath, "r")
+local function loadFile(fileName)
+    local filePath = hs.spoons.resourcePath(fileName)
+    local file = io.open(filePath, "r")
     
-    if not cssFile then
+    if not file then
         return nil
     end
     
-    local content = cssFile:read("*a")
-    cssFile:close()
+    local content = file:read("*a")
+    file:close()
     
     return content
 end
@@ -65,7 +65,10 @@ local function loadConfig()
     
     for _, link in ipairs(links) do
         if link.cssFile then
-            link.css = loadCssFile(link.cssFile)
+            link.css = loadFile(link.cssFile)
+        end
+        if link.jsFile then
+            link.js = loadFile(link.jsFile)
         end
     end
     
@@ -121,6 +124,20 @@ local function injectCSS(webview, css)
             }
         })();
     ]], escapedCSS)
+    webview:evaluateJavaScript(script)
+end
+
+local function injectJS(webview, js)
+    if not js then
+        return
+    end
+    local script = string.format([[
+        (function() {
+            if (window._hammerspoonJsInjected) return;
+            window._hammerspoonJsInjected = true;
+            %s
+        })();
+    ]], js)
     webview:evaluateJavaScript(script)
 end
 
@@ -207,7 +224,7 @@ local function fetchAllIcons()
     end
 end
 
-local function createWebview(url, name, width, height, css)
+local function createWebview(url, name, width, height, css, js)
     if obj._webviews[url] then
         return obj._webviews[url]
     end
@@ -231,11 +248,12 @@ local function createWebview(url, name, width, height, css)
       :closeOnEscape(true)
       :level(hs.drawing.windowLevels.floating)
     
-    if css then
+    if css or js then
         webview:navigationCallback(function(navigationType)
             if navigationType == "didFinishNavigation" then
                 hs.timer.doAfter(CSS_INJECT_DELAY, function()
                     injectCSS(webview, css)
+                    injectJS(webview, js)
                 end)
             end
         end)
@@ -272,8 +290,8 @@ local function showWebview(webview, name, width, height)
     webview:bringToFront()
 end
 
-local function toggleWebview(url, name, width, height, css)
-    local webview = createWebview(url, name, width, height, css)
+local function toggleWebview(url, name, width, height, css, js)
+    local webview = createWebview(url, name, width, height, css, js)
     local currentURL = webview:url()
     local needsNavigation = currentURL ~= url
     
@@ -313,11 +331,12 @@ local function createMenu()
             local width = item.width
             local height = item.height
             local css = item.css
+            local js = item.js
             
             local menuItem = {
                 title = name,
                 fn = function()
-                    toggleWebview(url, name, width, height, css)
+                    toggleWebview(url, name, width, height, css, js)
                 end
             }
             
