@@ -15,3 +15,6 @@ calendarMenubar:init():start()
 
 local dismissMeetingMenubar = hs.loadSpoon("DismissMeetingMenubar")
 dismissMeetingMenubar:init():start()
+
+local stageManagerUtilities = hs.loadSpoon("StageManagerUtilities")
+stageManagerUtilities:start()
