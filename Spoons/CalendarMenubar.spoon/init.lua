@@ -77,10 +77,25 @@ end
 
 local USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 
-local MENUBAR_ICON_SIZE = 22
+local MENUBAR_ICON_HEIGHT = 22
+local WEEKDAY_COLUMN_WIDTH = 10
+local MONTH_DAY_COLUMN_WIDTH = 22
+local MENUBAR_ICON_WIDTH = WEEKDAY_COLUMN_WIDTH + MONTH_DAY_COLUMN_WIDTH
+local WEEKDAY_FONT_SIZE = 8
+local WEEKDAY_TOP_MARGIN = 0
+local WEEKDAY_LETTER_STRIDE = 6.5
+local WEEKDAY_LETTER_FRAME_HEIGHT = 9
+local MONTH_FONT_SIZE = 7
+local MONTH_HEIGHT = 8
+local DAY_FONT_SIZE = 14
+local DAY_FRAME_Y = 7
+local DAY_FRAME_HEIGHT = 15
 local MONTH_ABBREVIATIONS = {
     "Jan", "Feb", "Mar", "Apr", "May", "Jun",
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+}
+local WEEKDAY_ABBREVIATIONS = {
+    "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"
 }
 
 local function findScreenContainingPoint(x, y)
@@ -249,48 +264,63 @@ end
 local function createDateIcon()
     local date = os.date("*t")
     local day = date.day
-    local monthAbbr = MONTH_ABBREVIATIONS[date.month]
-    
+    local monthAbbr = MONTH_ABBREVIATIONS[date.month]:upper()
+    local weekdayAbbr = WEEKDAY_ABBREVIATIONS[date.wday]
+
     local canvas = hs.canvas.new({
         x = 0,
         y = 0,
-        w = MENUBAR_ICON_SIZE,
-        h = MENUBAR_ICON_SIZE,
+        w = MENUBAR_ICON_WIDTH,
+        h = MENUBAR_ICON_HEIGHT,
     })
-    
-    local monthHeight = MENUBAR_ICON_SIZE * 0.33
-    local dateHeight = MENUBAR_ICON_SIZE * 0.67
-    
-    canvas[1] = {
+
+    for i = 1, 3 do
+        canvas[i] = {
+            type = "text",
+            text = weekdayAbbr:sub(i, i),
+            textFont = hs.styledtext.defaultFonts.boldSystemFont,
+            textSize = WEEKDAY_FONT_SIZE,
+            textColor = { white = 1 },
+            textAlignment = "center",
+            frame = {
+                x = 0,
+                y = WEEKDAY_TOP_MARGIN + WEEKDAY_LETTER_STRIDE * (i - 1),
+                w = WEEKDAY_COLUMN_WIDTH,
+                h = WEEKDAY_LETTER_FRAME_HEIGHT,
+            },
+        }
+    end
+
+    canvas[4] = {
         type = "text",
         text = monthAbbr,
-        textFont = hs.styledtext.defaultFonts.systemFont,
-        textSize = 7,
+        textFont = hs.styledtext.defaultFonts.boldSystemFont,
+        textSize = MONTH_FONT_SIZE,
         textColor = { white = 1 },
         textAlignment = "center",
         frame = {
-            x = 0,
+            x = WEEKDAY_COLUMN_WIDTH,
             y = 0,
-            w = MENUBAR_ICON_SIZE,
-            h = monthHeight,
+            w = MONTH_DAY_COLUMN_WIDTH,
+            h = MONTH_HEIGHT,
         },
     }
-    
-    canvas[2] = {
+
+    canvas[5] = {
         type = "text",
         text = tostring(day),
-        textFont = hs.styledtext.defaultFonts.systemFont,
-        textSize = 12,
+        textFont = hs.styledtext.defaultFonts.boldSystemFont,
+        textSize = DAY_FONT_SIZE,
         textColor = { white = 1 },
         textAlignment = "center",
         frame = {
-            x = 0,
-            y = monthHeight,
-            w = MENUBAR_ICON_SIZE,
-            h = dateHeight,
+            x = WEEKDAY_COLUMN_WIDTH,
+            y = DAY_FRAME_Y,
+            w = MONTH_DAY_COLUMN_WIDTH,
+            h = DAY_FRAME_HEIGHT,
         },
     }
-    
+
     return canvas:imageFromCanvas()
 end
 
