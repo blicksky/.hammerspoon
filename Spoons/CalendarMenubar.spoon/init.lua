@@ -78,12 +78,12 @@ end
 local USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
 
 local MENUBAR_ICON_HEIGHT = 22
-local WEEKDAY_COLUMN_WIDTH = 10
+local WEEKDAY_COLUMN_WIDTH = 9
 local MONTH_DAY_COLUMN_WIDTH = 22
 local MENUBAR_ICON_WIDTH = WEEKDAY_COLUMN_WIDTH + MONTH_DAY_COLUMN_WIDTH
-local WEEKDAY_FONT_SIZE = 8
+local WEEKDAY_FONT_SIZE = 7
 local WEEKDAY_TOP_MARGIN = 0
-local WEEKDAY_LETTER_STRIDE = 6.5
+local WEEKDAY_LETTER_STRIDE = 7.25
 local WEEKDAY_LETTER_FRAME_HEIGHT = 9
 local MONTH_FONT_SIZE = 7
 local MONTH_HEIGHT = 8
@@ -265,7 +265,7 @@ local function createDateIcon()
     local date = os.date("*t")
     local day = date.day
     local monthAbbr = MONTH_ABBREVIATIONS[date.month]:upper()
-    local weekdayAbbr = WEEKDAY_ABBREVIATIONS[date.wday]
+    local weekdayAbbr = WEEKDAY_ABBREVIATIONS[date.wday]:upper()
 
     local canvas = hs.canvas.new({
         x = 0,
