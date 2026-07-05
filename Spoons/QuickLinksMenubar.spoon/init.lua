@@ -34,6 +34,19 @@ local function loadFile(fileName)
     return content
 end
 
+local userContent = hs.webview.usercontent.new("QuickLinksOpenURL")
+userContent:setCallback(function(message)
+    if message and message.body and type(message.body) == "string" then
+        local url = message.body
+        -- Validate that the scheme is strictly HTTP or HTTPS to prevent local protocol handlers or shell command injection
+        if url:match("^https?://") then
+            hs.urlevent.openURL(url)
+        end
+    end
+end)
+
+local LINK_HANDLER_JS = loadFile("link-handler.js")
+
 local function loadConfig()
     local configPath = hs.spoons.resourcePath("config.json")
     local configFile = io.open(configPath, "r")
@@ -224,6 +237,20 @@ local function fetchAllIcons()
     end
 end
 
+local function startClickWatcher(url)
+    local watcher = obj._clickWatchers[url]
+    if watcher then
+        watcher:start()
+    end
+end
+
+local function stopClickWatcher(url)
+    local watcher = obj._clickWatchers[url]
+    if watcher then
+        watcher:stop()
+    end
+end
+
 local function createWebview(url, name, width, height, css, js)
     if obj._webviews[url] then
         return obj._webviews[url]
@@ -238,7 +265,7 @@ local function createWebview(url, name, width, height, css, js)
         y = windowY,
         w = windowWidth,
         h = windowHeight,
-    }):url(url)
+    }, {}, userContent):url(url)
       :windowStyle("titled")
       :windowTitle(name)
       :userAgent(USER_AGENT)
@@ -248,36 +275,44 @@ local function createWebview(url, name, width, height, css, js)
       :closeOnEscape(true)
       :level(hs.drawing.windowLevels.floating)
     
-    if css or js then
-        webview:navigationCallback(function(navigationType)
-            if navigationType == "didFinishNavigation" then
-                hs.timer.doAfter(CSS_INJECT_DELAY, function()
+    webview:navigationCallback(function(navigationType)
+        if navigationType == "didFinishNavigation" then
+            hs.timer.doAfter(CSS_INJECT_DELAY, function()
+                webview:evaluateJavaScript(LINK_HANDLER_JS)
+                if css then
                     injectCSS(webview, css)
+                end
+                if js then
                     injectJS(webview, js)
-                end)
-            end
-        end)
-    end
+                end
+            end)
+        end
+    end)
     
     local clickWatcher = hs.eventtap.new({hs.eventtap.event.types.leftMouseDown, hs.eventtap.event.types.rightMouseDown}, function(event)
+        if not webview:isVisible() then
+            stopClickWatcher(url)
+            return false
+        end
+
         local clickPoint = event:location()
         local webviewFrame = webview:frame()
         
-        if not isPointInsideFrame(clickPoint, webviewFrame) and webview:isVisible() then
+        if not isPointInsideFrame(clickPoint, webviewFrame) then
             webview:hide()
+            stopClickWatcher(url)
         end
         
         return false
     end)
     
-    clickWatcher:start()
     obj._clickWatchers[url] = clickWatcher
     
     obj._webviews[url] = webview
     return webview
 end
 
-local function showWebview(webview, name, width, height)
+local function showWebview(webview, url, name, width, height)
     local windowWidth, windowHeight = getWindowSize(width, height)
     local mousePos = hs.mouse.absolutePosition()
     local windowX, windowY = calculateWindowPosition(mousePos.x, mousePos.y, windowWidth, windowHeight)
@@ -288,6 +323,7 @@ local function showWebview(webview, name, width, height)
     webview:level(hs.drawing.windowLevels.floating)
     webview:show()
     webview:bringToFront()
+    startClickWatcher(url)
 end
 
 local function toggleWebview(url, name, width, height, css, js)
@@ -297,11 +333,12 @@ local function toggleWebview(url, name, width, height, css, js)
     
     if webview:isVisible() and not needsNavigation then
         webview:hide()
+        stopClickWatcher(url)
     else
         if needsNavigation then
             webview:url(url)
         end
-        showWebview(webview, name, width, height)
+        showWebview(webview, url, name, width, height)
     end
 end
 
